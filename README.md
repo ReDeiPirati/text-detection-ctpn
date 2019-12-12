@@ -26,7 +26,7 @@ It will generate a nms.so and a bbox.so in current folder.
 - put checkpoints_mlt/ in text-detection-ctpn/
 - put your images in data/demo, the results will be saved in data/res, and run demo in the root 
 ```shell
-python ./main/demo.py
+python ./main/demo.py --test_data_path ../mydata --checkpoint_path /floyd/input/checkpoints_mlt
 ```
 ***
 # training
@@ -46,9 +46,15 @@ python ./utils/prepare/split_label.py
 ## train 
 Simplely run
 ```shell
-python ./main/train.py
+python ./main/train.py --pretrained_model_path ../vgg_16/vgg_16.ckpt --data_folder /floyd/input/naapf
 ```
 - The model provided in checkpoints_mlt is trained on GTX1070 for 50k iters. It takes about 0.25s per iter. So it will takes about 3.5 hours to finished 50k iterations.
+
+
+## transfer-learning
+```bash
+python ./main/train.py --pretrained_model_path ../vgg_16/vgg_16.ckpt --data_folder /floyd/input/naapf --checkpoint_path_to_resume /floyd/input/checkpoints_mlt --max_steps 50100
+```
 ***
 # some results
 `NOTICE:` all the photos used below are collected from the internet. If it affects you, please contact me to delete them.

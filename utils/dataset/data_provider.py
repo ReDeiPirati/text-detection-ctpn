@@ -36,7 +36,7 @@ def load_annoataion(p):
 
 
 def generator(data_folder, vis=False):
-    image_list = np.array(get_training_data())
+    image_list = np.array(get_training_data(data_folder))
     print('{} training images in {}'.format(image_list.shape[0], data_folder))
     index = np.arange(0, image_list.shape[0])
     while True:
