@@ -11,10 +11,10 @@ from utils.dataset.data_util import GeneratorEnqueuer
 DATA_FOLDER = "data/dataset/mlt/"
 
 
-def get_training_data():
+def get_training_data(data_folder):
     img_files = []
     exts = ['jpg', 'png', 'jpeg', 'JPG']
-    for parent, dirnames, filenames in os.walk(os.path.join(DATA_FOLDER, "image")):
+    for parent, dirnames, filenames in os.walk(os.path.join(data_folder, "image")):
         for filename in filenames:
             for ext in exts:
                 if filename.endswith(ext):
@@ -29,15 +29,15 @@ def load_annoataion(p):
     with open(p, "r") as f:
         lines = f.readlines()
     for line in lines:
-        line = line.strip().split(",")
+        line = line.strip().split(",")[:4]  # Get only the bbox
         x_min, y_min, x_max, y_max = map(int, line)
         bbox.append([x_min, y_min, x_max, y_max, 1])
     return bbox
 
 
-def generator(vis=False):
+def generator(data_folder, vis=False):
     image_list = np.array(get_training_data())
-    print('{} training images in {}'.format(image_list.shape[0], DATA_FOLDER))
+    print('{} training images in {}'.format(image_list.shape[0], data_folder))
     index = np.arange(0, image_list.shape[0])
     while True:
         np.random.shuffle(index)
@@ -50,7 +50,7 @@ def generator(vis=False):
 
                 _, fn = os.path.split(im_fn)
                 fn, _ = os.path.splitext(fn)
-                txt_fn = os.path.join(DATA_FOLDER, "label", fn + '.txt')
+                txt_fn = os.path.join(data_folder, "label", fn + '.txt')
                 if not os.path.exists(txt_fn):
                     print("Ground truth for image {} not exist!".format(im_fn))
                     continue
@@ -76,9 +76,9 @@ def generator(vis=False):
                 continue
 
 
-def get_batch(num_workers, **kwargs):
+def get_batch(data_folder, num_workers, **kwargs):
     try:
-        enqueuer = GeneratorEnqueuer(generator(**kwargs), use_multiprocessing=True)
+        enqueuer = GeneratorEnqueuer(generator(data_folder, **kwargs), use_multiprocessing=True)
         enqueuer.start(max_queue_size=24, workers=num_workers)
         generator_output = None
         while True:

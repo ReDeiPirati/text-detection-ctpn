@@ -22,6 +22,7 @@ tf.app.flags.DEFINE_string('logs_path', 'logs_mlt/', '')
 tf.app.flags.DEFINE_string('pretrained_model_path', 'data/vgg_16.ckpt', '')
 tf.app.flags.DEFINE_boolean('restore', True, '')
 tf.app.flags.DEFINE_integer('save_checkpoint_steps', 2000, '')
+tf.app.flags.DEFINE_integer('data_folder', 'data/dataset/mlt/', '')
 FLAGS = tf.app.flags.FLAGS
 
 
@@ -86,7 +87,7 @@ def main(argv=None):
             if FLAGS.pretrained_model_path is not None:
                 variable_restore_op(sess)
 
-        data_generator = data_provider.get_batch(num_workers=FLAGS.num_readers)
+        data_generator = data_provider.get_batch(FLAGS.data_folder, num_workers=FLAGS.num_readers)
         start = time.time()
         for step in range(restore_step, FLAGS.max_steps):
             data = next(data_generator)
