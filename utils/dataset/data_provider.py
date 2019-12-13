@@ -77,7 +77,7 @@ def generator(data_folder, vis=False):
                 res_bbox = []
                 for p in bbox:
                     # This will return the resided bbox + p[4] which maps for the prob (the ground truth)
-                    res_bbox.append(resize_bbox(p[0], p[1], p[2], p[3], scale_x, scale_y) + p[4])
+                    res_bbox.append(resize_bbox(p[0], p[1], p[2], p[3], scale_x, scale_y))
 
                 if vis:  # Debugging purpose
                     for p in res_bbox:

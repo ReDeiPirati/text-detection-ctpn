@@ -43,7 +43,7 @@ def resize_bbox(xmin, ymin, xmax, ymax, scale_x, scale_y):
     ymin = int(np.round(ymin * scale_y))
     xmax = int(np.round(xmax * scale_x))
     ymax = int(np.round(ymax * scale_y))
-    return xmin, ymin, xmax, ymax
+    return xmin, ymin, xmax, ymax, 1
 
 
 class GeneratorEnqueuer():

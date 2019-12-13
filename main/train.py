@@ -4,11 +4,14 @@ import sys
 import time
 
 import tensorflow as tf
+import numpy as np
 
 sys.path.append(os.getcwd())
 from tensorflow.contrib import slim
 from nets import model_train as model
 from utils.dataset import data_provider as data_provider
+from utils.rpn_msr.proposal_layer import proposal_layer
+from utils.text_connector.detectors import TextDetector
 
 tf.app.flags.DEFINE_float('learning_rate', 1e-5, '')
 tf.app.flags.DEFINE_integer('max_steps', 50000, '')
@@ -24,6 +27,7 @@ tf.app.flags.DEFINE_string('pretrained_model_path', 'data/vgg_16.ckpt', '')
 tf.app.flags.DEFINE_boolean('restore', True, '')
 tf.app.flags.DEFINE_integer('save_checkpoint_steps', 2000, '')
 tf.app.flags.DEFINE_string('data_folder', '/floyd/input/checkpoints_mlt', '')
+tf.app.flags.DEFINE_string('data_eval_folder', '/floyd/input/naapf', '')
 FLAGS = tf.app.flags.FLAGS
 
 
@@ -72,7 +76,7 @@ def main(argv=None):
                                                              slim.get_trainable_variables(),
                                                              ignore_missing_vars=True)
 
-    steps_in_epoch = get_steps_in_epoch(FLAGS.data_folder)
+    steps_in_epoch = data_provider.get_steps_in_epoch(FLAGS.data_folder)
     epoch_counter = 0
 
     config = tf.ConfigProto()
@@ -120,21 +124,41 @@ def main(argv=None):
 
             if step % steps_in_epoch == 0:
                 data_eval_generator = data_provider.get_batch(FLAGS.data_eval_folder, num_workers=FLAGS.num_readers)
-                bboxes = []
+                gt_bboxes = []
                 pred_bboxes = []
-                for it in steps_in_epoch:
+                for it in range(steps_in_epoch):
                     data = next(data_eval_generator)
                     bbox_pred_val, cls_prob_val = sess.run([bbox_pred, cls_prob],
                                                        feed_dict={input_image: data[0],
                                                                   input_im_info: data[2]})
-                    bboxes.append(data[1])
-                    pred_bboxes.append(bbox_pred_val)
+                    
+                    textsegs, _ = proposal_layer(cls_prob_val, bbox_pred_val, data[2])
+                    scores = textsegs[:, 0]
+                    textsegs = textsegs[:, 1:5]
 
+                    textdetector = TextDetector(DETECT_MODE='H')
+                    
+                    img = data[0][0]
+                    boxes = textdetector.detect(textsegs, scores[:, np.newaxis], img.shape[:2])
+                    boxes = np.array(boxes, dtype=np.int)
+                    
+                    points = data[1]
+                    gt_bboxes.append([points[0], points[1], points[2], points[3]])
+                    pred_bboxes.append(boxes)
+                    
+                    if it == 0:
+                        print(np.array(gt_bboxes, dtype=np.int), pred_bboxes)
+                
+                    
+#                 mIoU, update_op = tf.metrics.mean_iou(pred_bboxes, bboxes, num_classes=1, weights=None)
+#                 iou = sess.run(mIoU)
+#                 tf.summary.scalar('meanIoU', mIoU)
 
-                mIoU, update_op = tf.metrics.mean_iou(predict, bboxes, num_classes=1, weights=None)
-                iou = sess.run(mIoU)
-                tf.summary.scalar('meanIoU', mIoU)
-                print('Epoch {}, IoU score = {:.3f})'.format(epoch_counter, iou))   
+                from sklearn.metrics import jaccard_similarity_score
+                iou = jaccard_similarity_score(pred_bboxes, gt_bboxes)
+
+                print('Epoch {}, IoU score = {:.3f})'.format(epoch_counter, iou))
+                epoch_counter += 1
 
 
 if __name__ == '__main__':
