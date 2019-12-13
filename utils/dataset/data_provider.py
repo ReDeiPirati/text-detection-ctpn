@@ -9,6 +9,18 @@ import numpy as np
 from utils.dataset.data_util import GeneratorEnqueuer, resize_image_with_scale, resize_bbox
 
 
+def get_steps_in_epoch(data_folder):
+    img_files = []
+    exts = ['jpg', 'png', 'jpeg', 'JPG']
+    for parent, dirnames, filenames in os.walk(os.path.join(data_folder, "image")):
+        for filename in filenames:
+            for ext in exts:
+                if filename.endswith(ext):
+                    img_files.append(os.path.join(parent, filename))
+                    break
+    return len(img_files)
+
+
 def get_training_data(data_folder):
     img_files = []
     exts = ['jpg', 'png', 'jpeg', 'JPG']
@@ -64,10 +76,10 @@ def generator(data_folder, vis=False):
                 # Rescale bbox
                 res_bbox = []
                 for p in bbox:
-                    # this will return the resided bbox + 1 which maps for the prob (the ground truth)
-                    res_bbox.append(resize_bbox(p[0], p[1], p[2], p[3], scale_x, scale_y) + [1])
+                    # This will return the resided bbox + p[4] which maps for the prob (the ground truth)
+                    res_bbox.append(resize_bbox(p[0], p[1], p[2], p[3], scale_x, scale_y) + p[4])
 
-                if vis:
+                if vis:  # Debugging purpose
                     for p in res_bbox:
                         cv2.rectangle(im, (p[0], p[1]), (p[2], p[3]), color=(0, 0, 255), thickness=1)
                     fig, axs = plt.subplots(1, 1, figsize=(30, 30))

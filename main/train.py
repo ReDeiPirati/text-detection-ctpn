@@ -72,6 +72,9 @@ def main(argv=None):
                                                              slim.get_trainable_variables(),
                                                              ignore_missing_vars=True)
 
+    steps_in_epoch = get_steps_in_epoch(FLAGS.data_folder)
+    epoch_counter = 0
+
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     config.gpu_options.per_process_gpu_memory_fraction = 0.95
@@ -113,6 +116,25 @@ def main(argv=None):
                 filename = os.path.join(FLAGS.checkpoint_path, filename)
                 saver.save(sess, filename)
                 print('Write model to: {:s}'.format(filename))
+
+
+            if step % steps_in_epoch == 0:
+                data_eval_generator = data_provider.get_batch(FLAGS.data_eval_folder, num_workers=FLAGS.num_readers)
+                bboxes = []
+                pred_bboxes = []
+                for it in steps_in_epoch:
+                    data = next(data_eval_generator)
+                    bbox_pred_val, cls_prob_val = sess.run([bbox_pred, cls_prob],
+                                                       feed_dict={input_image: data[0],
+                                                                  input_im_info: data[2]})
+                    bboxes.append(data[1])
+                    pred_bboxes.append(bbox_pred_val)
+
+
+                mIoU, update_op = tf.metrics.mean_iou(predict, bboxes, num_classes=1, weights=None)
+                iou = sess.run(mIoU)
+                tf.summary.scalar('meanIoU', mIoU)
+                print('Epoch {}, IoU score = {:.3f})'.format(epoch_counter, iou))   
 
 
 if __name__ == '__main__':
