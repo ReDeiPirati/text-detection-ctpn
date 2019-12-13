@@ -6,9 +6,7 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 
-from utils.dataset.data_util import GeneratorEnqueuer
-
-DATA_FOLDER = "data/dataset/mlt/"
+from utils.dataset.data_util import GeneratorEnqueuer, resize_image_with_scale, resize_bbox
 
 
 def get_training_data(data_folder):
@@ -45,6 +43,10 @@ def generator(data_folder, vis=False):
             try:
                 im_fn = image_list[i]
                 im = cv2.imread(im_fn)
+                
+                # Rescale Image to prevent OOM and to be compliant to original dataset
+                im, scale_x, scale_y = resize_image_with_scale(im, 228, 228)
+
                 h, w, c = im.shape
                 im_info = np.array([h, w, c]).reshape([1, 3])
 
@@ -59,8 +61,13 @@ def generator(data_folder, vis=False):
                     print("Ground truth for image {} empty!".format(im_fn))
                     continue
 
+                # Rescale bbox
+                res_bbox = []
+                for p in bbox:
+                    res_bbox.append(resize_bbox(p[0], p[1], p[2], p[3], scale_x, scale_y))
+
                 if vis:
-                    for p in bbox:
+                    for p in res_bbox:
                         cv2.rectangle(im, (p[0], p[1]), (p[2], p[3]), color=(0, 0, 255), thickness=1)
                     fig, axs = plt.subplots(1, 1, figsize=(30, 30))
                     axs.imshow(im[:, :, ::-1])
@@ -69,7 +76,7 @@ def generator(data_folder, vis=False):
                     plt.tight_layout()
                     plt.show()
                     plt.close()
-                yield [im], bbox, im_info
+                yield [im], res_bbox, im_info
 
             except Exception as e:
                 print(e)
@@ -79,7 +86,7 @@ def generator(data_folder, vis=False):
 def get_batch(data_folder, num_workers, **kwargs):
     try:
         enqueuer = GeneratorEnqueuer(generator(data_folder, **kwargs), use_multiprocessing=True)
-        enqueuer.start(max_queue_size=24, workers=num_workers)
+        enqueuer.start(max_queue_size=8, workers=num_workers)
         generator_output = None
         while True:
             while enqueuer.is_running():

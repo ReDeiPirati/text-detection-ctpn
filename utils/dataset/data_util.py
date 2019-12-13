@@ -1,6 +1,7 @@
 import multiprocessing
 import threading
 import time
+import cv2
 
 import numpy as np
 
@@ -8,6 +9,40 @@ try:
     import queue
 except ImportError:
     import Queue as queue
+
+
+def resize_image(img):
+    img_size = img.shape
+    im_size_min = np.min(img_size[0:2])
+    im_size_max = np.max(img_size[0:2])
+
+    im_scale = float(600) / float(im_size_min)
+    if np.round(im_scale * im_size_max) > 1200:
+        im_scale = float(1200) / float(im_size_max)
+    new_h = int(img_size[0] * im_scale)
+    new_w = int(img_size[1] * im_scale)
+
+    new_h = new_h if new_h // 16 == 0 else (new_h // 16 + 1) * 16
+    new_w = new_w if new_w // 16 == 0 else (new_w // 16 + 1) * 16
+
+    re_im = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+    return re_im, (new_h / img_size[0], new_w / img_size[1])
+
+
+def resize_image_with_scale(img, newsize_x, newsize_y):
+    scale_x = newsize_x / img.shape[1]
+    scale_y = newsize_y / img.shape[0]
+
+    img = cv2.resize(img, (newsize_x, newsize_y))
+    return img, scale_x, scale_y
+
+
+def resize_bbox(xmin, ymin, xmax, ymax, scale_x, scale_y):
+    xmin = int(np.round(xmin * scale_x))
+    ymin = int(np.round(ymin * scale_y))
+    xmax = int(np.round(xmax * scale_x))
+    ymax = int(np.round(ymax * scale_y))
+    return xmin, ymin, xmax, ymax
 
 
 class GeneratorEnqueuer():
