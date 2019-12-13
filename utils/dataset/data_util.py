@@ -30,6 +30,7 @@ def resize_image(img):
 
 
 def resize_image_with_scale(img, newsize_x, newsize_y):
+    # Took inspiration from here: https://github.com/italojs/resize_dataset_pascalvoc/blob/master/image.py#L31-L63
     scale_x = newsize_x / img.shape[1]
     scale_y = newsize_y / img.shape[0]
 
