@@ -12,6 +12,9 @@ except ImportError:
 
 
 def resize_image(img):
+    """
+    Rescale the image to 608 x 816 (ICDAR 2013 image dimension)
+    """
     img_size = img.shape
     im_size_min = np.min(img_size[0:2])
     im_size_max = np.max(img_size[0:2])

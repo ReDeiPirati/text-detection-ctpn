@@ -6,7 +6,7 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 
-from utils.dataset.data_util import GeneratorEnqueuer, resize_image_with_scale, resize_bbox
+from utils.dataset.data_util import GeneratorEnqueuer, resize_image, resize_image_with_scale, resize_bbox
 
 
 def get_steps_in_epoch(data_folder):
@@ -56,8 +56,8 @@ def generator(data_folder, vis=False):
                 im_fn = image_list[i]
                 im = cv2.imread(im_fn)
                 
-                # Rescale Image to prevent OOM and to be compliant to original dataset
-                im, scale_x, scale_y = resize_image_with_scale(im, 228, 228)
+                # Rescale Image to prevent OOM and to be compliant to original dataset size (608 x 816)
+                im, (scale_x, scale_y) = resize_image(im)
 
                 h, w, c = im.shape
                 im_info = np.array([h, w, c]).reshape([1, 3])

@@ -29,6 +29,8 @@ tf.app.flags.DEFINE_boolean('restore', True, '')
 tf.app.flags.DEFINE_integer('save_checkpoint_steps', 2000, '')
 tf.app.flags.DEFINE_string('data_folder', '/floyd/input/checkpoints_mlt', '')
 tf.app.flags.DEFINE_string('data_eval_folder', '/floyd/input/naapf', '')
+tf.app.flags.DEFINE_integer('eval_steps', 5000, '')
+
 FLAGS = tf.app.flags.FLAGS
 
 def get_iou(bb1, bb2):
@@ -198,72 +200,127 @@ def main(argv=None):
                 print('Write model to: {:s}'.format(filename))
                 
             if step % steps_in_epoch == 0:
-                epoch += 1
+                # First eval iteration
+                if epoch == 0:    
+                    data_eval_generator = data_provider.get_batch(FLAGS.data_eval_folder, num_workers=FLAGS.num_readers)
+                    for it in range(steps_in_epoch):
+                        data = next(data_eval_generator)
+                        
+                        # Adding Ground Truth Label
+                        img_to_log = data[0][0]
+                        for p in data[1]:
+                            cv2.rectangle(img_to_log, (p[0], p[1]), (p[2], p[3]), color=(0, 0, 255), thickness=1)
 
+                        # Get im shape
+                        im_info = data[2][0]
+                        h, w, c = im_info[0], im_info[1], im_info[2]
+                        
+                        # Reshape to log on TB
+                        img_to_log= np.reshape(img_to_log, (-1, h, w, c))
+                        image_op = tf.summary.image("Eval data with GT bbox", img_to_log)
+                    
+                        image_w_gt_bboxes = sess.run(image_op)
+                        summary_writer.add_summary(image_w_gt_bboxes, global_step=step)
+                        
+                epoch += 1
             
-#             if step % steps_in_epoch == 0:
-            if step % 2000 == 0:
-                data_eval_generator = data_provider.get_batch(FLAGS.data_eval_folder, num_workers=FLAGS.num_readers)   
-                iou_list = []
-                
+            
+            # Evaluate
+            if step % FLAGS.eval_steps == 0:
+                data_eval_generator = data_provider.get_batch(FLAGS.data_eval_folder, num_workers=FLAGS.num_readers)
                 for it in range(steps_in_epoch):
-                    gt_bboxes = []
-                    pred_bboxes = []
                     data = next(data_eval_generator)
-                    
-                    # Adding Ground Truth Label
-                    img_to_log = data[0][0]
-                    for p in data[1]:
-                        cv2.rectangle(img_to_log, (p[0], p[1]), (p[2], p[3]), color=(0, 0, 255), thickness=1)
-                    
-                     # Debugging
-                    img_to_log= np.reshape(img_to_log, (-1, 228, 228, 3))
-                    image_op = tf.summary.image("Eval data", img_to_log)
-                    
-                    bbox_pred_val, cls_prob_val, image_str = sess.run([bbox_pred, cls_prob, image_op],
-                                                       feed_dict={input_image: data[0],
-                                                                  input_im_info: data[2]})
-                    
-                    summary_writer.add_summary(image_str, global_step=step)
-                    
+                    bbox_pred_val, cls_prob_val = sess.run([bbox_pred, cls_prob],
+                                                           feed_dict={input_image: data[0],
+                                                                      input_im_info: data[2]})
+                        
+                    im_info = data[2][0]
+                    h, w, c = im_info[0], im_info[1], im_info[2]
+                    # Reshape to log on TB
+                    img_to_log_w_pred_boxes= np.reshape(data[0][0], (-1, h, w, c))
+                        
                     textsegs, _ = proposal_layer(cls_prob_val, bbox_pred_val, data[2])
                     scores = textsegs[:, 0]
                     textsegs = textsegs[:, 1:5]
-
                     textdetector = TextDetector(DETECT_MODE='H')
-                    
-                    img = data[0][0]
-                    img_to_log_w_bboxes = data[0][0]
-                    boxes = textdetector.detect(textsegs, scores[:, np.newaxis], img.shape[:2])
+                    boxes = textdetector.detect(textsegs, scores[:, np.newaxis], img_to_log_w_pred_boxes.shape[:2])
                     boxes = np.array(boxes, dtype=np.int)
-                    for b in boxes:
-                        pred_bboxes.append([b[0], b[1], b[6], b[7]])
-                        cv2.rectangle(img_to_log_w_bboxes, (b[0], b[1]), (b[2], b[3]), color=(255, 0, 0), thickness=1)
+
+                    for i, box in enumerate(boxes):
+                        cv2.polylines(img_to_log_w_pred_boxes, [box[:8].astype(np.int32).reshape((-1, 1, 2))], True, color=(0, 255, 0),
+                                          thickness=2)
+#                         for b in boxes:
+#                             cv2.rectangle(img_to_log_w_bboxes, (b[0], b[1]), (b[2], b[3]), color=(255, 0, 0), thickness=1)
+                        
+                    image_op2 = tf.summary.image("Eval data with Pred bbox", img_to_log_w_pred_boxes)
                     
-                    tuple_points = data[1]
-                    for point in tuple_points:
-                        gt_bboxes.append([point[0], point[1], point[2], point[3]])
+                    image_w_pred_bboxes = sess.run(image_op2)
+                    summary_writer.add_summary(image_w_pred_bboxes, global_step=step)
+                        
+            
+#             if step % steps_in_epoch == 0:
+#             if step % 500000 == 0:
+#                 data_eval_generator = data_provider.get_batch(FLAGS.data_eval_folder, num_workers=FLAGS.num_readers)   
+#                 iou_list = []
+                
+#                 for it in range(steps_in_epoch):
+#                     gt_bboxes = []
+#                     pred_bboxes = []
+#                     data = next(data_eval_generator)
                     
-                     # Debugging
-                    img_to_log2 = np.reshape(img_to_log_w_bboxes, (-1, 228, 228, 3))
-                    image_op2 = tf.summary.image("Eval data w/ bbox", img_to_log2)
+#                     # Adding Ground Truth Label
+#                     img_to_log = data[0][0]
+#                     for p in data[1]:
+#                         cv2.rectangle(img_to_log, (p[0], p[1]), (p[2], p[3]), color=(0, 0, 255), thickness=1)
                     
-                    image_str2 = sess.run(image_op2)
-                    summary_writer.add_summary(image_str2, global_step=step)
+#                      # Debugging
+#                     img_to_log= np.reshape(img_to_log, (-1, 228, 228, 3))
+#                     image_op = tf.summary.image("Eval data", img_to_log)
+                    
+#                     bbox_pred_val, cls_prob_val, image_str = sess.run([bbox_pred, cls_prob, image_op],
+#                                                        feed_dict={input_image: data[0],
+#                                                                   input_im_info: data[2]})
+                    
+#                     summary_writer.add_summary(image_str, global_step=step)
+                    
+#                     textsegs, _ = proposal_layer(cls_prob_val, bbox_pred_val, data[2])
+#                     scores = textsegs[:, 0]
+#                     textsegs = textsegs[:, 1:5]
+
+#                     textdetector = TextDetector(DETECT_MODE='H')
+                    
+#                     img = data[0][0]
+#                     img_to_log_w_bboxes = data[0][0]
+#                     boxes = textdetector.detect(textsegs, scores[:, np.newaxis], img.shape[:2])
+#                     boxes = np.array(boxes, dtype=np.int)
+#                     for b in boxes:
+#                         pred_bboxes.append([b[0], b[1], b[6], b[7]])
+#                         cv2.rectangle(img_to_log_w_bboxes, (b[0], b[1]), (b[2], b[3]), color=(255, 0, 0), thickness=1)
+                    
+#                     tuple_points = data[1]
+#                     for point in tuple_points:
+#                         gt_bboxes.append([point[0], point[1], point[2], point[3]])
+                    
+#                      # Debugging
+#                     img_to_log2 = np.reshape(img_to_log_w_bboxes, (-1, 228, 228, 3))
+#                     image_op2 = tf.summary.image("Eval data w/ bbox", img_to_log2)
+                    
+#                     image_str2 = sess.run(image_op2)
+#                     summary_writer.add_summary(image_str2, global_step=step)
                     
 
-                    # Extend list to meet the one for gt
-                    if len(pred_bboxes) == 0 or len(gt_bboxes) > len(pred_bboxes):
-                        pred_bboxes = pred_bboxes[:len(gt_bboxes)] + [[0, 0, 0, 0]]*(len(gt_bboxes) - len(pred_bboxes))
+#                     # Extend list to meet the one for gt
+#                     if len(pred_bboxes) == 0 or len(gt_bboxes) > len(pred_bboxes):
+#                         pred_bboxes = pred_bboxes[:len(gt_bboxes)] + [[0, 0, 0, 0]]*(len(gt_bboxes) - len(pred_bboxes))
 
   
-                    for bb_gt, bb_pred in zip(gt_bboxes, pred_bboxes):
-                        bb1 = np.array(bb_gt, dtype=np.int)
-                        bb2 = np.array(bb_pred, dtype=np.int)
-                        iou_list.append(plain_iou(np.array(bb1, dtype=np.int), np.array(bb2, dtype=np.int)))
+#                     for bb_gt, bb_pred in zip(gt_bboxes, pred_bboxes):
+#                         bb1 = np.array(bb_gt, dtype=np.int)
+#                         bb2 = np.array(bb_pred, dtype=np.int)
+#                         iou_list.append(plain_iou(np.array(bb1, dtype=np.int), np.array(bb2, dtype=np.int)))
                             
                        
-                print('# Eval # Step {:06d}, Epoch {:03d}, mIoU score = {:.3f}'.format(step, epoch, np.average(iou_list)))
+#                 print('# Eval # Step {:06d}, Epoch {:03d}, mIoU score = {:.3f}'.format(step, epoch, np.average(iou_list)))
                         
 
 if __name__ == '__main__':
